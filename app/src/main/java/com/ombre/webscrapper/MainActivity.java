@@ -1,10 +1,16 @@
 package com.ombre.webscrapper;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.Manifest;
+import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -12,11 +18,18 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
+import android.webkit.PermissionRequest;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.PermissionDeniedResponse;
+import com.karumi.dexter.listener.PermissionGrantedResponse;
+import com.karumi.dexter.listener.single.PermissionListener;
 import com.opencsv.CSVWriter;
 
 import org.jsoup.Jsoup;
@@ -32,8 +45,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-TextView title,time,name,link,image,genere,fbpage;
+TextView title,time;
     String title1,time1,name1,link1,image1,genere1,fbpage1;
+    private static final int REQUEST_SETTINGS = 101;
 ProgressDialog progressDialog;
 int writestate=0;
      @Override
@@ -46,10 +60,18 @@ int writestate=0;
 
         progressDialog = new ProgressDialog(MainActivity.this);
         progressDialog.setMessage("Scraping In Progress....");
+        progressDialog.setCancelable(false);
        findViewById(R.id.start).setOnClickListener(new View.OnClickListener() {
            @Override
            public void onClick(View v) {
+               String permission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+               int res = MainActivity.this.checkCallingOrSelfPermission(permission);
+               if(res == PackageManager.PERMISSION_GRANTED)
                new maintask().execute();
+               else
+               {
+                   Toast.makeText(MainActivity.this, "Grant Storage Permission", Toast.LENGTH_SHORT).show();
+               }
            }
        });
 
@@ -99,7 +121,8 @@ int writestate=0;
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-
+if(title1==null)
+    title1="notitle";
             String PATH = Environment.getExternalStorageDirectory()+"/Ombre/"+title1+".jpg";
             File filecheck=new File(PATH);
             if (filecheck.exists())
@@ -243,5 +266,76 @@ else {
         writer.close();
     }
 
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Dexter.withActivity(MainActivity.this)
+                .withPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                .withListener(new PermissionListener() {
+                    @Override
+                    public void onPermissionGranted(PermissionGrantedResponse response) {
+                        // permission is granted
+                        Toast.makeText(MainActivity.this, "Permission Granted..",
+                                Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onPermissionDenied(PermissionDeniedResponse response) {
+                        // check for permanent denial of permission
+                        if (response.isPermanentlyDenied()) {
+                            showSettingsDialog();
+                        } else {
+                            Toast.makeText(MainActivity.this, "Permission Denied...!!",
+                                    Toast.LENGTH_SHORT).show();
+
+                        }
+                    }
+
+                    @Override
+                    public void onPermissionRationaleShouldBeShown(com.karumi.dexter.listener.PermissionRequest permissionRequest, PermissionToken permissionToken) {
+                        permissionToken.continuePermissionRequest();
+                    }
+
+
+                }).check();
+    }
+    private void showSettingsDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle("Need Permissions");
+        builder.setMessage("This app needs Storage permission. You can grant "+
+                "them in app settings.");
+        builder.setPositiveButton("GO TO SETTINGS", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+                openSettings();
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+        builder.show();
+
+    }
+
+    // navigating user to app settings
+    private void openSettings() {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        Uri uri = Uri.fromParts("package", getPackageName(), null);
+        intent.setData(uri);
+        startActivityForResult(intent, REQUEST_SETTINGS);
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_SETTINGS) {
+            // Check permissions and perform your action here
+        }
+    }
 
 }
